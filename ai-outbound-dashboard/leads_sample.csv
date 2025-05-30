@@ -1,0 +1,6 @@
+firstName,lastName,email,company,title,phone,website,industry,companySize,location
+Alice,Smith,alice.smith@example.com,Acme Corp,Marketing Manager,123-456-7890,https://acme.com,Marketing,100-500,New York
+Bob,Johnson,bob.johnson@example.com,Globex Inc,Sales Director,234-567-8901,https://globex.com,Sales,500-1000,San Francisco
+Carol,Williams,carol.williams@example.com,Initech,CTO,345-678-9012,https://initech.com,Technology,50-200,Austin
+David,Brown,david.brown@example.com,Stark Industries,Product Lead,456-789-0123,https://stark.com,Engineering,1000-5000,Los Angeles
+Eve,Davis,eve.davis@example.com,Wayne Enterprises,Operations Manager,567-890-1234,https://wayne.com,Operations,200-500,Gotham
