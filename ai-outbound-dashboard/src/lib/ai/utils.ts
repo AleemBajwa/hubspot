@@ -27,7 +27,7 @@ export const extractLeadInsights = async (leadData: any) => {
     leadData: JSON.stringify(leadData),
   });
 
-  return JSON.parse(result.content);
+  return JSON.parse(typeof result.content === "string" ? result.content : JSON.stringify(result.content));
 };
 
 // Utility function to generate personalized message content
@@ -66,7 +66,7 @@ export const generatePersonalizedMessage = async (
     context: context || 'No additional context provided',
   });
 
-  return JSON.parse(result.content);
+  return JSON.parse(typeof result.content === "string" ? result.content : JSON.stringify(result.content));
 };
 
 // Utility function to score lead quality
@@ -100,7 +100,7 @@ export const scoreLeadQuality = async (leadData: any) => {
     leadData: JSON.stringify(leadData),
   });
 
-  return JSON.parse(result.content);
+  return JSON.parse(typeof result.content === "string" ? result.content : JSON.stringify(result.content));
 };
 
 // Utility function to predict optimal contact timing
@@ -135,5 +135,5 @@ export const predictContactTiming = async (leadData: any, historicalData?: any) 
     historicalData: historicalData ? JSON.stringify(historicalData) : 'No historical data available',
   });
 
-  return JSON.parse(result.content);
+  return JSON.parse(typeof result.content === "string" ? result.content : JSON.stringify(result.content));
 }; 
