@@ -12,6 +12,20 @@ interface QualificationRequest {
   };
 }
 
+interface Lead {
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  company?: string;
+  [key: string]: unknown;
+}
+
+interface QualificationResult {
+  qualified: boolean;
+  score: number;
+  reason: string;
+}
+
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const body = await req.json() as QualificationRequest;
@@ -56,10 +70,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     });
 
     return NextResponse.json({ results });
-  } catch (error) {
-    logger.error('Error qualifying leads', { error });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    logger.error('Error qualifying leads', { error: errorMessage });
     return NextResponse.json(
-      { error: 'Failed to qualify leads' },
+      { error: errorMessage },
       { status: 500 }
     );
   }
