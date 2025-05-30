@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { WebSocketServer } from 'ws';
+import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
 
 // Store active WebSocket connections
@@ -95,10 +95,10 @@ export async function GET(req: NextRequest) {
 }
 
 // Cleanup function to close WebSocket server
-export function cleanup() {
-  if (wss) {
-    wss.close();
-    wss = null;
-  }
-  clients.clear();
-} 
+// export function cleanup() {
+//   if (wss) {
+//     wss.close();
+//     wss = null;
+//   }
+//   clients.clear();
+// } 
