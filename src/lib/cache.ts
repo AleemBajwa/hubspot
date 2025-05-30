@@ -1,76 +1,91 @@
 interface CacheEntry<T> {
-  data: T;
+  value: T;
   timestamp: number;
-  expiresAt: number;
+  ttl: number;
 }
 
+interface CacheOptions {
+  ttl?: number;
+  cleanupInterval?: number;
+}
+
+type CacheKey = string;
+
 class Cache {
-  private static instance: Cache;
-  private cache: Map<string, CacheEntry<any>>;
-  private defaultTTL: number = 60 * 1000; // 1 minute in milliseconds
+  private store: Map<CacheKey, CacheEntry<unknown>>;
+  private ttl: number;
+  private cleanupInterval: number;
+  private cleanupTimer: NodeJS.Timeout | null;
 
-  private constructor() {
-    this.cache = new Map();
-    // Clean up expired entries every minute
-    setInterval(() => this.cleanup(), 60 * 1000);
+  constructor(options: CacheOptions = {}) {
+    this.store = new Map();
+    this.ttl = options.ttl || 300000; // 5 minutes default
+    this.cleanupInterval = options.cleanupInterval || 60000; // 1 minute default
+    this.cleanupTimer = null;
+    this.startCleanup();
   }
 
-  public static getInstance(): Cache {
-    if (!Cache.instance) {
-      Cache.instance = new Cache();
-    }
-    return Cache.instance;
+  set<T>(key: CacheKey, value: T, ttl?: number): void {
+    const entry: CacheEntry<T> = {
+      value,
+      timestamp: Date.now(),
+      ttl: ttl || this.ttl
+    };
+    this.store.set(key, entry as CacheEntry<unknown>);
   }
 
-  public async get<T>(key: string): Promise<T | null> {
-    const entry = this.cache.get(key);
+  get<T>(key: CacheKey): T | null {
+    const entry = this.store.get(key) as CacheEntry<T> | undefined;
     if (!entry) return null;
 
-    if (Date.now() > entry.expiresAt) {
-      this.cache.delete(key);
+    if (Date.now() - entry.timestamp > entry.ttl) {
+      this.store.delete(key);
       return null;
     }
 
-    return entry.data as T;
+    return entry.value;
   }
 
-  public set<T>(key: string, data: T, ttl: number = this.defaultTTL): void {
-    const now = Date.now();
-    this.cache.set(key, {
-      data,
-      timestamp: now,
-      expiresAt: now + ttl,
-    });
+  delete(key: CacheKey): void {
+    this.store.delete(key);
   }
 
-  public delete(key: string): void {
-    this.cache.delete(key);
+  clear(): void {
+    this.store.clear();
   }
 
-  public clear(): void {
-    this.cache.clear();
-  }
+  private startCleanup(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+    }
 
-  private cleanup(): void {
-    const now = Date.now();
-    for (const [key, entry] of this.cache.entries()) {
-      if (now > entry.expiresAt) {
-        this.cache.delete(key);
+    this.cleanupTimer = setInterval(() => {
+      const now = Date.now();
+      for (const [key, entry] of this.store.entries()) {
+        if (now - entry.timestamp > entry.ttl) {
+          this.store.delete(key);
+        }
       }
+    }, this.cleanupInterval);
+  }
+
+  stopCleanup(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
     }
   }
 }
 
-export const cache = Cache.getInstance();
+export const cache = new Cache();
 
-// Helper function to create a cache key
-export function createCacheKey(prefix: string, params: Record<string, any>): string {
+export function createCacheKey(prefix: string, params: Record<string, unknown>): string {
   const sortedParams = Object.keys(params)
     .sort()
-    .reduce((acc, key) => {
+    .reduce((acc: Record<string, unknown>, key: string) => {
       acc[key] = params[key];
       return acc;
-    }, {} as Record<string, any>);
+    }, {});
 
   return `${prefix}:${JSON.stringify(sortedParams)}`;
 }

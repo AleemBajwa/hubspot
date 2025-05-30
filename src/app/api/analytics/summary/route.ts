@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { withCache, createCacheKey } from '../../../lib/cache';
+import { NextResponse } from 'next/server';
+import { withCache, createCacheKey } from '@/lib/cache';
 
 async function fetchAnalyticsData() {
   // In a real app, these would be fetched from a database
@@ -48,7 +48,7 @@ async function fetchAnalyticsData() {
   };
 }
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const cacheKey = createCacheKey('analytics:summary', {});
     const analytics = await withCache(cacheKey, fetchAnalyticsData, 60 * 1000); // Cache for 1 minute

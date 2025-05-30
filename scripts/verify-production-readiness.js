@@ -1,6 +1,7 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../ai-outbound-dashboard/.env') });
 
 // ANSI color codes for console output
 const colors = {

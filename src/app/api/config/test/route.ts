@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getConfig } from '../../../lib/config';
-import { logger } from '../../../lib/logger';
+import { NextResponse } from 'next/server';
+import { getConfig } from '@/lib/config';
+import { logger } from '@/lib/logger';
 
 const configLogger = logger;
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const config = getConfig();
     

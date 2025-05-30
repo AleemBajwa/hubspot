@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import AnalyticsDashboard from "../../components/AnalyticsDashboard";
+import AnalyticsDashboard from "../../../ai-outbound-dashboard/src/components/AnalyticsDashboard";
 
 export default function AnalyticsPage() {
   return (

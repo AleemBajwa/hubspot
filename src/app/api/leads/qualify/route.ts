@@ -1,48 +1,65 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { qualifyLeadsWithWorkflow } from '../../../lib/ai/workflow';
-import { Lead } from '../../../types/lead';
-import { withCache, createCacheKey } from '../../../lib/cache';
+import { Lead, LeadQualificationResult } from '@/types/lead';
+import { qualifyLead } from '@/lib/ai/workflow';
+import { logger } from '@/lib/logger';
 
-export async function POST(req: NextRequest) {
+interface QualificationRequest {
+  leads: Lead[];
+  options?: {
+    batchSize?: number;
+    timeout?: number;
+    priority?: 'high' | 'normal' | 'low';
+  };
+}
+
+export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
-    const { leads } = await req.json();
+    const body = await req.json() as QualificationRequest;
+    const { leads, options } = body;
 
-    if (!Array.isArray(leads)) {
+    if (!Array.isArray(leads) || leads.length === 0) {
       return NextResponse.json(
-        { error: 'Invalid request: leads must be an array' },
+        { error: 'Invalid request: leads must be a non-empty array' },
         { status: 400 }
       );
     }
 
-    // Validate lead data
-    const validatedLeads = leads.map((lead: any) => {
-      const { firstName, lastName, email, company, title, ...rest } = lead;
-      if (!firstName || !lastName || !email || !company || !title) {
-        throw new Error('Invalid lead data: missing required fields');
-      }
-      return { firstName, lastName, email, company, title, ...rest } as Lead;
+    const results: LeadQualificationResult[] = [];
+    const batchSize = options?.batchSize || 10;
+    const timeout = options?.timeout || 30000; // 30 seconds default
+
+    for (let i = 0; i < leads.length; i += batchSize) {
+      const batch = leads.slice(i, i + batchSize);
+      const batchPromises = batch.map(lead => 
+        Promise.race([
+          qualifyLead(lead),
+          new Promise<LeadQualificationResult>((_, reject) => 
+            setTimeout(() => reject(new Error('Qualification timeout')), timeout)
+          )
+        ])
+      );
+
+      const batchResults = await Promise.allSettled(batchPromises);
+      results.push(
+        ...batchResults
+          .filter((result): result is PromiseFulfilledResult<LeadQualificationResult> => 
+            result.status === 'fulfilled'
+          )
+          .map(result => result.value)
+      );
+    }
+
+    logger.info('Lead qualification completed', {
+      totalLeads: leads.length,
+      qualifiedLeads: results.length,
+      options
     });
 
-    // Use caching for lead qualification
-    const cacheKey = createCacheKey('leads:qualification', {
-      leads: validatedLeads.map(l => `${l.email}:${l.company}`).join(','),
-    });
-
-    const qualifiedLeads = await withCache(
-      cacheKey,
-      () => qualifyLeadsWithWorkflow(validatedLeads),
-      5 * 60 * 1000 // Cache for 5 minutes
-    );
-
-    // Add cache control headers
-    const headers = new Headers();
-    headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
-
-    return NextResponse.json({ qualifiedLeads }, { headers });
+    return NextResponse.json({ results });
   } catch (error) {
-    console.error('Error qualifying leads:', error);
+    logger.error('Error qualifying leads', { error });
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to qualify leads' },
+      { error: 'Failed to qualify leads' },
       { status: 500 }
     );
   }

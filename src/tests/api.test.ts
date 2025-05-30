@@ -5,30 +5,47 @@ import { Lead } from '../types/lead';
 
 describe('API Endpoints', () => {
   const mockLead: Lead = {
-    firstName: 'John',
-    lastName: 'Doe',
-    email: 'john.doe@example.com',
+    id: 'test-1',
     company: 'Tech Corp',
-    title: 'CTO'
+    website: 'https://techcorp.com',
+    industry: 'Technology',
+    size: '51-200',
+    location: 'San Francisco, CA',
+    contact: {
+      name: 'John Doe',
+      title: 'CTO',
+      email: 'john.doe@example.com',
+      phone: '+1234567890',
+      linkedin: 'https://linkedin.com/in/johndoe'
+    },
+    source: 'test',
+    status: 'new',
+    metadata: {},
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
   };
 
   describe('POST /api/leads/qualify', () => {
     it('should qualify valid leads', async () => {
       const req = new NextRequest('http://localhost:3000/api/leads/qualify', {
         method: 'POST',
-        body: JSON.stringify([mockLead])
+        body: JSON.stringify({
+          leads: [mockLead]
+        })
       });
 
       const response = await qualifyLeads(req);
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.qualifiedLeads).toHaveLength(1);
-      expect(data.qualifiedLeads[0]).toMatchObject({
+      expect(data.results).toHaveLength(1);
+      expect(data.results[0].lead).toMatchObject({
         ...mockLead,
-        qualificationScore: expect.any(Number),
-        qualificationReason: expect.any(String),
-        confidenceLevel: expect.any(Number)
+        qualification: {
+          reason: expect.any(String),
+          confidence: expect.any(Number),
+          criteria: expect.any(Array)
+        }
       });
     });
 
@@ -48,7 +65,7 @@ describe('API Endpoints', () => {
     it('should handle empty leads array', async () => {
       const req = new NextRequest('http://localhost:3000/api/leads/qualify', {
         method: 'POST',
-        body: JSON.stringify([])
+        body: JSON.stringify({ leads: [] })
       });
 
       const response = await qualifyLeads(req);
@@ -60,19 +77,23 @@ describe('API Endpoints', () => {
   });
 
   describe('POST /api/hubspot/contacts', () => {
-    const qualifiedLead = {
+    const qualifiedLead: Lead = {
       ...mockLead,
-      qualificationScore: 8,
-      qualificationReason: 'High potential lead',
-      confidenceLevel: 0.9,
-      qualifiedAt: new Date(),
-      processingTime: 1000
+      status: 'qualified',
+      score: 8,
+      metadata: {
+        qualification: {
+          reason: 'High potential lead',
+          confidence: 0.9,
+          criteria: []
+        }
+      }
     };
 
     it('should sync qualified leads to HubSpot', async () => {
       const req = new NextRequest('http://localhost:3000/api/hubspot/contacts', {
         method: 'POST',
-        body: JSON.stringify([qualifiedLead])
+        body: JSON.stringify({ leads: [qualifiedLead] })
       });
 
       const response = await syncToHubspot(req);
@@ -81,21 +102,26 @@ describe('API Endpoints', () => {
       expect(response.status).toBe(200);
       expect(data.results).toHaveLength(1);
       expect(data.results[0]).toMatchObject({
-        email: qualifiedLead.email,
+        contact: {
+          email: qualifiedLead.contact.email,
         status: expect.any(String)
+        }
       });
     });
 
     it('should handle leads below qualification threshold', async () => {
-      const lowScoreLead = {
+      const lowScoreLead: Lead = {
         ...qualifiedLead,
-        qualificationScore: 5,
+        score: 5,
+        contact: {
+          ...qualifiedLead.contact,
         email: 'lowscore@example.com'
+        }
       };
 
       const req = new NextRequest('http://localhost:3000/api/hubspot/contacts', {
         method: 'POST',
-        body: JSON.stringify([lowScoreLead])
+        body: JSON.stringify({ leads: [lowScoreLead] })
       });
 
       const response = await syncToHubspot(req);

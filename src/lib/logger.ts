@@ -1,108 +1,107 @@
-import { getConfigValue } from './config';
+import { getConfig } from './config';
 import fs from 'fs';
 import path from 'path';
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
+interface LogEntry {
+  timestamp: string;
+  level: LogLevel;
+  message: string;
+  metadata?: Record<string, unknown>;
+}
+
+interface LoggerOptions {
+  level?: LogLevel;
+  filePath?: string;
+}
+
 class Logger {
-  private static instance: Logger;
-  private logLevel: LogLevel;
-  private logFilePath: string;
-  private logStream: fs.WriteStream | null = null;
+  private level: LogLevel;
+  private filePath: string;
+  private logStream: fs.WriteStream | null;
 
-  private constructor() {
-    // Ensure the log level from config is a valid LogLevel
-    const configLevel = getConfigValue('logging', 'level');
-    this.logLevel = (['debug', 'info', 'warn', 'error'].includes(configLevel) 
-      ? configLevel 
-      : 'info') as LogLevel;
-    this.logFilePath = getConfigValue('logging', 'filePath');
+  constructor(options: LoggerOptions = {}) {
+    const config = getConfig();
+    const configLevel = config.logging.level;
+    this.level = options.level || (['debug', 'info', 'warn', 'error'].includes(configLevel) ? configLevel as LogLevel : 'info');
+    this.filePath = options.filePath || config.logging.filePath;
+    this.logStream = null;
     this.initializeLogStream();
-  }
-
-  public static getInstance(): Logger {
-    if (!Logger.instance) {
-      Logger.instance = new Logger();
-    }
-    return Logger.instance;
   }
 
   private initializeLogStream(): void {
     try {
-      // Ensure log directory exists
-      const logDir = path.dirname(this.logFilePath);
+      const logDir = path.dirname(this.filePath);
       if (!fs.existsSync(logDir)) {
         fs.mkdirSync(logDir, { recursive: true });
       }
-
-      // Create or append to log file
-      this.logStream = fs.createWriteStream(this.logFilePath, { flags: 'a' });
+      this.logStream = fs.createWriteStream(this.filePath, { flags: 'a' });
     } catch (error) {
       console.error('Failed to initialize log stream:', error);
       this.logStream = null;
     }
   }
 
-  private getLogLevelValue(level: LogLevel): number {
-    const levels: Record<LogLevel, number> = {
-      debug: 0,
-      info: 1,
-      warn: 2,
-      error: 3,
-    };
-    return levels[level];
-  }
-
   private shouldLog(level: LogLevel): boolean {
-    return this.getLogLevelValue(level) >= this.getLogLevelValue(this.logLevel);
+    const levels: LogLevel[] = ['debug', 'info', 'warn', 'error'];
+    return levels.indexOf(level) >= levels.indexOf(this.level);
   }
 
-  private formatMessage(level: LogLevel, message: string, meta?: any): string {
-    const timestamp = new Date().toISOString();
-    const metaString = meta ? ` ${JSON.stringify(meta)}` : '';
-    return `[${timestamp}] ${level.toUpperCase()}: ${message}${metaString}\n`;
+  private formatLogEntry(level: LogLevel, message: string, metadata?: Record<string, unknown>): LogEntry {
+    return {
+      timestamp: new Date().toISOString(),
+      level,
+      message,
+      metadata
+    };
   }
 
-  private writeLog(level: LogLevel, message: string, meta?: any): void {
-    if (!this.shouldLog(level)) return;
-
-    const formattedMessage = this.formatMessage(level, message, meta);
+  private writeLog(entry: LogEntry): void {
+    const logLine = JSON.stringify(entry) + '\n';
     
-    // Always log to console
-    console.log(formattedMessage.trim());
-
-    // Write to file if stream is available
     if (this.logStream) {
-      this.logStream.write(formattedMessage);
+      this.logStream.write(logLine);
+    }
+    
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[${entry.level.toUpperCase()}] ${entry.message}`, entry.metadata || '');
     }
   }
 
-  public debug(message: string, meta?: any): void {
-    this.writeLog('debug', message, meta);
+  debug(message: string, metadata?: Record<string, unknown>): void {
+    if (this.shouldLog('debug')) {
+      this.writeLog(this.formatLogEntry('debug', message, metadata));
+  }
   }
 
-  public info(message: string, meta?: any): void {
-    this.writeLog('info', message, meta);
+  info(message: string, metadata?: Record<string, unknown>): void {
+    if (this.shouldLog('info')) {
+      this.writeLog(this.formatLogEntry('info', message, metadata));
+  }
   }
 
-  public warn(message: string, meta?: any): void {
-    this.writeLog('warn', message, meta);
+  warn(message: string, metadata?: Record<string, unknown>): void {
+    if (this.shouldLog('warn')) {
+      this.writeLog(this.formatLogEntry('warn', message, metadata));
+  }
   }
 
-  public error(message: string, meta?: any): void {
-    this.writeLog('error', message, meta);
+  error(message: string, metadata?: Record<string, unknown>): void {
+    if (this.shouldLog('error')) {
+      this.writeLog(this.formatLogEntry('error', message, metadata));
+  }
   }
 
-  public async close(): Promise<void> {
+  close(): void {
     if (this.logStream) {
-      return new Promise((resolve) => {
-        this.logStream!.end(() => resolve());
-      });
+      this.logStream.end();
+      this.logStream = null;
     }
   }
 }
 
-export const logger = Logger.getInstance();
+export const logger = new Logger();
 
 // Export a function to create a child logger with context
 export function createLogger(context: string) {

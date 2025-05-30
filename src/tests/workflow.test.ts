@@ -3,16 +3,24 @@ import { Lead } from '../types/lead';
 
 describe('Lead Qualification Workflow', () => {
   const mockLead: Lead = {
-    firstName: 'John',
-    lastName: 'Doe',
-    email: 'john.doe@example.com',
+    id: 'test-1',
     company: 'Tech Corp',
-    title: 'CTO',
-    phone: '+1234567890',
     website: 'https://techcorp.com',
     industry: 'Technology',
-    companySize: '51-200',
-    location: 'San Francisco, CA'
+    size: '51-200',
+    location: 'San Francisco, CA',
+    contact: {
+      name: 'John Doe',
+      title: 'CTO',
+      email: 'john.doe@example.com',
+      phone: '+1234567890',
+      linkedin: 'https://linkedin.com/in/johndoe'
+    },
+    source: 'test',
+    status: 'new',
+    metadata: {},
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
   };
 
   describe('qualifyLeadWithWorkflow', () => {
@@ -21,56 +29,102 @@ describe('Lead Qualification Workflow', () => {
       
       expect(result).toMatchObject({
         ...mockLead,
-        qualificationScore: expect.any(Number),
-        qualificationReason: expect.any(String),
-        confidenceLevel: expect.any(Number),
-        qualifiedAt: expect.any(Date),
-        processingTime: expect.any(Number)
+        status: 'qualified',
+        score: expect.any(Number),
+        metadata: {
+          qualification: {
+            reason: expect.any(String),
+            confidence: expect.any(Number),
+            criteria: expect.any(Array)
+          }
+        }
       });
 
-      expect(result.qualificationScore).toBeWithinRange(1, 10);
-      expect(result.confidenceLevel).toBeWithinRange(0, 1);
+      expect(result.score).toBeGreaterThanOrEqual(1);
+      expect(result.score).toBeLessThanOrEqual(10);
+      
+      const qualification = (result.metadata as { qualification: { confidence: number } }).qualification;
+      expect(qualification.confidence).toBeGreaterThanOrEqual(0);
+      expect(qualification.confidence).toBeLessThanOrEqual(1);
     });
 
     it('should handle leads with minimal required fields', async () => {
       const minimalLead: Lead = {
-        firstName: 'Jane',
-        lastName: 'Smith',
-        email: 'jane.smith@example.com',
+        id: 'test-2',
         company: 'Startup Inc',
-        title: 'CEO'
+        contact: {
+          name: 'Jane Smith',
+          title: 'CEO',
+          email: 'jane.smith@example.com'
+        },
+        source: 'test',
+        status: 'new',
+        metadata: {},
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
 
       const result = await qualifyLeadWithWorkflow(minimalLead);
       
       expect(result).toMatchObject({
         ...minimalLead,
-        qualificationScore: expect.any(Number),
-        qualificationReason: expect.any(String),
-        confidenceLevel: expect.any(Number)
+        status: 'qualified',
+        score: expect.any(Number),
+        metadata: {
+          qualification: {
+            reason: expect.any(String),
+            confidence: expect.any(Number),
+            criteria: expect.any(Array)
+          }
+        }
       });
     });
 
     it('should handle errors gracefully', async () => {
-      const invalidLead = { ...mockLead, company: '' };
+      const invalidLead: Lead = {
+        ...mockLead,
+        company: ''
+      };
       
-      const result = await qualifyLeadWithWorkflow(invalidLead as Lead);
+      const result = await qualifyLeadWithWorkflow(invalidLead);
       
       expect(result).toMatchObject({
         ...invalidLead,
-        qualificationScore: 1,
-        confidenceLevel: 0,
-        qualificationReason: expect.stringContaining('Error')
+        status: 'disqualified',
+        score: 1,
+        metadata: {
+          qualification: {
+            reason: expect.stringContaining('Error'),
+            confidence: 0,
+            criteria: expect.any(Array)
+          }
+        }
       });
     });
   });
 
   describe('qualifyLeadsWithWorkflow', () => {
     it('should qualify multiple leads in parallel', async () => {
-      const leads = [
+      const leads: Lead[] = [
         mockLead,
-        { ...mockLead, email: 'jane@example.com', firstName: 'Jane' },
-        { ...mockLead, email: 'bob@example.com', firstName: 'Bob' }
+        {
+          ...mockLead,
+          id: 'test-3',
+          contact: {
+            ...mockLead.contact,
+            name: 'Jane Doe',
+            email: 'jane@example.com'
+          }
+        },
+        {
+          ...mockLead,
+          id: 'test-4',
+          contact: {
+            ...mockLead.contact,
+            name: 'Bob Smith',
+            email: 'bob@example.com'
+          }
+        }
       ];
 
       const results = await qualifyLeadsWithWorkflow(leads);
@@ -78,9 +132,15 @@ describe('Lead Qualification Workflow', () => {
       expect(results).toHaveLength(3);
       results.forEach(result => {
         expect(result).toMatchObject({
-          qualificationScore: expect.any(Number),
-          qualificationReason: expect.any(String),
-          confidenceLevel: expect.any(Number)
+          status: 'qualified',
+          score: expect.any(Number),
+          metadata: {
+            qualification: {
+              reason: expect.any(String),
+              confidence: expect.any(Number),
+              criteria: expect.any(Array)
+            }
+          }
         });
       });
     });
@@ -91,17 +151,32 @@ describe('Lead Qualification Workflow', () => {
     });
 
     it('should process leads with mixed validity', async () => {
-      const mixedLeads = [
+      const mixedLeads: Lead[] = [
         mockLead,
-        { ...mockLead, email: '', company: '' } as Lead,
-        { ...mockLead, email: 'valid@example.com' }
+        {
+          ...mockLead,
+          id: 'test-5',
+          company: '',
+          contact: {
+            ...mockLead.contact,
+            email: ''
+          }
+        },
+        {
+          ...mockLead,
+          id: 'test-6',
+          contact: {
+            ...mockLead.contact,
+            email: 'valid@example.com'
+          }
+        }
       ];
 
       const results = await qualifyLeadsWithWorkflow(mixedLeads);
       
       expect(results).toHaveLength(3);
-      expect(results.some(r => r.qualificationScore === 1)).toBe(true);
-      expect(results.some(r => r.qualificationScore > 1)).toBe(true);
+      expect(results.some(r => r.score === 1)).toBe(true);
+      expect(results.some(r => r.score > 1)).toBe(true);
     });
   });
 }); 
